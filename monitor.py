@@ -236,6 +236,38 @@ def get_incoming_transfers(target_address):
 
     return incoming_data
 
+# === 保存 BIS 数据到文件 ===
+def save_bis_data(bis_swap_data, bis_amm_data):
+    """将 BIS SWAP 和 BIS AMM 的数据保存到文件，方便调试"""
+    bis_data = {
+        "timestamp": datetime.datetime.now(timezone.utc).isoformat(),
+        "bis_swap": {
+            "address": BIS_SWAP_ADDRESS,
+            "total_senders": len(bis_swap_data),
+            "total_amount": sum(bis_swap_data.values()),
+            "top_senders": [
+                {"address": addr, "amount": amount}
+                for addr, amount in sorted(bis_swap_data.items(), key=lambda x: x[1], reverse=True)[:20]
+            ]
+        },
+        "bis_amm": {
+            "address": BIS_AMM_ADDRESS,
+            "total_senders": len(bis_amm_data),
+            "total_amount": sum(bis_amm_data.values()),
+            "top_senders": [
+                {"address": addr, "amount": amount}
+                for addr, amount in sorted(bis_amm_data.items(), key=lambda x: x[1], reverse=True)[:20]
+            ]
+        }
+    }
+
+    with open('bis_data_debug.json', 'w', encoding='utf-8') as f:
+        json.dump(bis_data, f, indent=2, ensure_ascii=False)
+
+    print(f"   💾 BIS 数据已保存到 bis_data_debug.json")
+    print(f"   📊 BIS SWAP: {len(bis_swap_data)} 个发送方, 总计 {sum(bis_swap_data.values()):.2f} 代币")
+    print(f"   📊 BIS AMM: {len(bis_amm_data)} 个发送方, 总计 {sum(bis_amm_data.values()):.2f} 代币")
+
 # === 主数据抓取 ===
 def fetch_data(minters_set, db_old_keys):
     print(f"🚀 [2/3] 正在下载全量持仓榜...")
@@ -244,6 +276,9 @@ def fetch_data(minters_set, db_old_keys):
     print(f"📊 正在获取 BIS SWAP 和 BIS AMM 接收记录...")
     bis_swap_incoming = get_incoming_transfers(BIS_SWAP_ADDRESS)
     bis_amm_incoming = get_incoming_transfers(BIS_AMM_ADDRESS)
+
+    # 保存 BIS 数据到文件（用于调试）
+    save_bis_data(bis_swap_incoming, bis_amm_incoming)
 
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
