@@ -361,11 +361,21 @@ def fetch_data(minters_set, db_old_keys):
                 bis_amm_net = bis_amm_in - bis_amm_out
                 total_balance = bal + bis_swap_net + bis_amm_net
 
-                # 5. 初步判断是否为新人
+                # 5. 判断用户类型
                 is_potential_new = (key not in db_old_keys) and (len(db_old_keys) > 0)
 
+                # 判断是否是流动性提供者（参与了BIS AMM）
+                is_lp = (bis_amm_in > 0 or bis_amm_out > 0)
+
+                # 判断是否是交易者（只在BIS SWAP交易）
+                is_trader = (bis_swap_in > 0 or bis_swap_out > 0) and not is_lp
+
                 status = ""
-                if is_potential_new:
+                if is_lp:
+                    status = "LP"  # 流动性提供者
+                if is_trader:
+                    status = "TRADER"  # 交易者
+                if is_potential_new and not status:
                     status = "CHECKING"
                     candidates_for_check.append(key)
 
@@ -512,7 +522,9 @@ def generate_report(holders, db):
         .mint-tag{{background:#9c27b0;color:#fff;padding:2px 4px;font-size:10px;border-radius:3px;font-weight:bold;margin-right:4px}}
         .new-tag{{background:#f44336;color:#fff;padding:2px 4px;font-size:10px;border-radius:3px;margin-right:4px}}
         .ret-tag{{background:#2196F3;color:#fff;padding:2px 4px;font-size:10px;border-radius:3px;margin-right:4px}}
-        .rem{{background:#ff9800;color:#000;padding:2px 4px;font-size:10px;border-radius:3px;font-weight:bold}}
+        .lp-tag{{background:#00e676;color:#000;padding:2px 4px;font-size:10px;border-radius:3px;font-weight:bold;margin-right:4px}}
+        .trader-tag{{background:#ff9800;color:#000;padding:2px 4px;font-size:10px;border-radius:3px;font-weight:bold;margin-right:4px}}
+        .rem{{background:#9e9e9e;color:#fff;padding:2px 4px;font-size:10px;border-radius:3px}}
 
         .btn{{background:#333;border:1px solid #555;color:#fff;cursor:pointer;padding:4px 8px;border-radius:4px}}
 
@@ -525,7 +537,7 @@ def generate_report(holders, db):
     <div class="info">总人数: <span id="count">{len(holders)}</span> | 更新: {now} (北京时间)</div>
 
     <div class="controls">
-        <input type="text" id="search" placeholder="🔍 搜索地址 / MINT / NEW / 备注..." onkeyup="render()">
+        <input type="text" id="search" placeholder="🔍 搜索地址 / LP / TRADER / MINT / NEW / 备注..." onkeyup="render()">
     </div>
 
     <div class="controls" style="margin-top: 15px;">
@@ -626,7 +638,13 @@ def generate_report(holders, db):
             let totalBalanceStr = item.total_balance.toLocaleString('en-US', {{maximumFractionDigits: 0}});
 
             let tags = "";
+            // 流动性提供者标签
+            if(item.status === "LP") tags += "<span class='lp-tag'>💧 LP</span>";
+            // 交易者标签
+            if(item.status === "TRADER") tags += "<span class='trader-tag'>🔄 交易</span>";
+            // 新地址标签
             if(item.status === "NEW") tags += "<span class='new-tag'>🔥 NEW</span>";
+            // 回归标签
             if(item.status === "RETURN") tags += "<span class='ret-tag'>♻️ 回归</span>";
 
             if(item.note) {{
