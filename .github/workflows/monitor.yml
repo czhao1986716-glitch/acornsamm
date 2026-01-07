@@ -1,4 +1,4 @@
-name: ACORNS Monitor
+  name: ACORNS Monitor
 
   on:
     schedule:
