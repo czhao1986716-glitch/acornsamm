@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-01-07T10:15:29.250556+00:00",
+  "timestamp": "2026-01-07T10:34:07.067499+00:00",
   "bis_swap": {
     "address": "0x62879BB3dD949c4CF06f71BF7c281DcF24D163e7",
     "incoming": {
@@ -125,5 +125,16 @@
         }
       ]
     }
+  },
+  "liquidity_providers": {
+    "total_count": 1,
+    "top_providers": [
+      {
+        "address": "0x62879bb3dd949c4cf06f71bf7c281dcf24d163e7",
+        "net_inflow": 167475.0073364444,
+        "total_in": 403963.54044624,
+        "total_out": 236488.5331097956
+      }
+    ]
   }
 }
