@@ -150,23 +150,56 @@ def get_incoming_transfers(target_address):
 
     incoming_data = {}  # {from_address: total_amount}
 
+    print(f"   📡 正在查询: {url}")
+    print(f"   🔑 目标地址: {target_address}")
+
     try:
+        page_count = 0
         while True:
+            page_count += 1
             resp = requests.get(url, params=params, headers=headers, timeout=10)
-            if resp.status_code != 200: break
+
+            if resp.status_code != 200:
+                print(f"   ⚠️ 请求失败 (第{page_count}页): 状态码 {resp.status_code}")
+                break
 
             data = resp.json()
             items = data.get('items', [])
-            if not items: break
+
+            if not items:
+                print(f"   📄 第{page_count}页: 没有更多数据")
+                break
+
+            print(f"   📄 第{page_count}页: 获取到 {len(items)} 条记录")
+
+            # 调试: 显示前3条记录
+            if page_count == 1:
+                print(f"   🔍 前3条记录示例:")
+                for i, item in enumerate(items[:3]):
+                    from_addr = item.get('from', {}).get('hash', '')
+                    to_addr = item.get('to', {}).get('hash', '')
+                    token_addr = item.get('token', {}).get('address', '')
+                    amount = float(item.get('value', 0) or 0)
+                    decimals = int(item.get('token', {}).get('decimals', 18))
+                    actual_amount = amount / (10 ** decimals)
+                    print(f"      {i+1}. 发送方: {from_addr[:20]}... → 接收方: {to_addr[:20]}... | 金额: {actual_amount:.2f} | 合约: {token_addr[:20]}...")
 
             for item in items:
                 # 校验合约
-                if item.get('token', {}).get('address', '').lower() != TOKEN_CONTRACT.lower():
+                token_addr = item.get('token', {}).get('address', '')
+                if token_addr.lower() != TOKEN_CONTRACT.lower():
                     continue
 
-                # 获取发送方地址
+                # 获取发送方和接收方地址
                 from_addr = item.get('from', {}).get('hash', '').lower()
+                to_addr = item.get('to', {}).get('hash', '').lower()
+
+                # 忽略零地址和空地址
                 if not from_addr or from_addr == '0x0000000000000000000000000000000000000000':
+                    continue
+
+                # 只统计发送到目标地址的记录
+                if to_addr != target_address.lower():
                     continue
 
                 # 计算金额
@@ -185,9 +218,21 @@ def get_incoming_transfers(target_address):
             else:
                 break
 
-        print(f"   ✅ {target_address}: 找到 {len(incoming_data)} 个发送地址")
+        # 统计总金额
+        total_amount = sum(incoming_data.values())
+        print(f"   ✅ {target_address}: 找到 {len(incoming_data)} 个发送地址, 总计 {total_amount:.2f} 代币")
+
+        # 显示前5个最大的发送方
+        if incoming_data:
+            sorted_senders = sorted(incoming_data.items(), key=lambda x: x[1], reverse=True)[:5]
+            print(f"   📊 前5大发送方:")
+            for addr, amount in sorted_senders:
+                print(f"      {addr[:20]}... → {amount:.2f} 代币")
+
     except Exception as e:
         print(f"   ⚠️ 获取 {target_address} 接收记录失败: {e}")
+        import traceback
+        traceback.print_exc()
 
     return incoming_data
 
