@@ -202,9 +202,10 @@ def get_incoming_transfers(target_address):
                 if to_addr != target_address.lower():
                     continue
 
-                # 计算金额
-                amount = float(item.get('value', 0) or 0)
-                decimals = int(item.get('token', {}).get('decimals', 18))
+                # 计算金额 - API 返回的 value 在 total 对象下
+                total_data = item.get('total', {})
+                amount = float(total_data.get('value', 0) or 0)
+                decimals = int(total_data.get('decimals', 18))
                 actual_amount = amount / (10 ** decimals)
 
                 # 累加到字典
