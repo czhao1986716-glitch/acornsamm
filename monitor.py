@@ -250,7 +250,7 @@ def get_transfers(target_address, direction="incoming"):
     return transfer_data
 
 # === 保存 BIS 数据到文件 ===
-def save_bis_data(bis_swap_data, bis_amm_data):
+def save_bis_data(bis_swap_data, bis_amm_data, lp_data=None):
     """将 BIS SWAP 和 BIS AMM 的数据保存到文件，方便调试"""
     bis_data = {
         "timestamp": datetime.datetime.now(timezone.utc).isoformat(),
@@ -294,6 +294,21 @@ def save_bis_data(bis_swap_data, bis_amm_data):
         }
     }
 
+    # 添加流动性提供者数据
+    if lp_data:
+        bis_data["liquidity_providers"] = {
+            "total_count": lp_data.get("total_lp_count", 0),
+            "top_providers": [
+                {
+                    "address": addr,
+                    "net_inflow": data['net'],
+                    "total_in": data['in'],
+                    "total_out": data['out']
+                }
+                for addr, data in list(lp_data.get("lp_providers", {}).items())[:20]
+            ]
+        }
+
     with open('bis_data_debug.json', 'w', encoding='utf-8') as f:
         json.dump(bis_data, f, indent=2, ensure_ascii=False)
 
@@ -316,6 +331,23 @@ def fetch_data(minters_set, db_old_keys):
     bis_amm_incoming = get_transfers(BIS_AMM_ADDRESS, "incoming")   # +
     bis_amm_outgoing = get_transfers(BIS_AMM_ADDRESS, "outgoing")    # -
 
+    # 创建流动性提供者完整榜单（包括没有持仓的地址）
+    lp_providers = {}
+    for addr, amount_in in bis_amm_incoming.items():
+        amount_out = bis_amm_outgoing.get(addr, 0)
+        lp_providers[addr] = {
+            'in': amount_in,
+            'out': amount_out,
+            'net': amount_in - amount_out
+        }
+
+    # 按净流入排序
+    sorted_lp = sorted(lp_providers.items(), key=lambda x: x[1]['net'], reverse=True)
+    print(f"\n   💎 流动性提供者统计: 找到 {len(lp_providers)} 个 LP 地址")
+    print(f"   📊 前10大流动性提供者:")
+    for i, (addr, data) in enumerate(sorted_lp[:10], 1):
+        print(f"      {i:2d}. {addr[:20]}... → 净流入: {data['net']:,.2f} (流入: {data['in']:,.2f}, 流出: {data['out']:,.2f})")
+
     # 保存 BIS 数据到文件（用于调试）
     save_bis_data({
         "incoming": bis_swap_incoming,
@@ -323,6 +355,9 @@ def fetch_data(minters_set, db_old_keys):
     }, {
         "incoming": bis_amm_incoming,
         "outgoing": bis_amm_outgoing
+    }, {
+        "lp_providers": dict(sorted_lp),
+        "total_lp_count": len(lp_providers)
     })
 
     headers = {"User-Agent": "Mozilla/5.0"}
