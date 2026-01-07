@@ -466,8 +466,38 @@ def generate_report(holders, db):
 
     table_data = []
 
-    for h in holders:
-        key = h['key']
+    # 创建当前持有人字典
+    current_holders = {h['key']: h for h in holders}
+
+    # 处理所有历史地址（包括当前余额为0的）
+    all_keys = set(db.keys()) | set(current_holders.keys())
+
+    for key in all_keys:
+        # 如果是当前持有人，使用最新数据
+        if key in current_holders:
+            h = current_holders[key]
+        else:
+            # 如果不在当前持有人列表，创建一个空记录
+            h = {
+                'key': key,
+                'btc': '-',
+                'bal': 0,
+                'pct': 0,
+                'is_mint': False,
+                'status': 'SOLD_OUT',  # 已卖完
+                'bis_swap_in': 0,
+                'bis_swap_out': 0,
+                'bis_amm_in': 0,
+                'bis_amm_out': 0,
+                'total_balance': 0,
+                'rank': 9999
+            }
+
+        # 如果没有历史记录，跳过（新地址但余额为0的）
+        if key not in db or not db[key]:
+            if h['bal'] == 0 and h['total_balance'] == 0:
+                continue
+
         if key not in db: db[key] = []
         history = db[key]
 
@@ -504,9 +534,9 @@ def generate_report(holders, db):
         if h['is_mint'] and key != PROJECT_WALLET.lower():
             note = "🎁 [MINT] " + note
 
-        # 计算BIS总转入和总转出（用于显示和排序）
-        bis_total_in = h.get('bis_swap_in', 0) + h.get('bis_amm_in', 0)
-        bis_total_out = h.get('bis_swap_out', 0) + h.get('bis_amm_out', 0)
+        # 计算BIS净流入
+        bis_swap_net = h.get('bis_swap_in', 0) - h.get('bis_swap_out', 0)
+        bis_amm_net = h.get('bis_amm_in', 0) - h.get('bis_amm_out', 0)
 
         table_data.append({
             "rank": h['rank'],
@@ -520,11 +550,15 @@ def generate_report(holders, db):
             "is_new_day": (len(history) == 1),
             "bis_swap_in": h.get('bis_swap_in', 0),
             "bis_swap_out": h.get('bis_swap_out', 0),
+            "bis_swap_net": bis_swap_net,  # BIS SWAP净流入，用于排序
             "bis_amm_in": h.get('bis_amm_in', 0),
             "bis_amm_out": h.get('bis_amm_out', 0),
-            "bis_total": bis_total_in - bis_total_out,  # BIS净额，用于排序
+            "bis_amm_net": bis_amm_net,  # BIS AMM净流入，用于排序
             "total_balance": h['total_balance']  # 总和
         })
+
+    # 按总和排序，已卖完的（总和<=0）排在后面
+    table_data.sort(key=lambda x: x['total_balance'], reverse=True)
 
     save_db(db)
 
@@ -559,6 +593,7 @@ def generate_report(holders, db):
         .ret-tag{{background:#2196F3;color:#fff;padding:2px 4px;font-size:10px;border-radius:3px;margin-right:4px}}
         .lp-tag{{background:#00e676;color:#000;padding:2px 4px;font-size:10px;border-radius:3px;font-weight:bold;margin-right:4px}}
         .trader-tag{{background:#ff9800;color:#000;padding:2px 4px;font-size:10px;border-radius:3px;font-weight:bold;margin-right:4px}}
+        .soldout-tag{{background:#607d8b;color:#fff;padding:2px 4px;font-size:10px;border-radius:3px;margin-right:4px}}
         .rem{{background:#9e9e9e;color:#fff;padding:2px 4px;font-size:10px;border-radius:3px}}
 
         .btn{{background:#333;border:1px solid #555;color:#fff;cursor:pointer;padding:4px 8px;border-radius:4px}}
@@ -588,7 +623,8 @@ def generate_report(holders, db):
                 <th onclick="sort('rank')" style="width:60px;">排名 ⇵</th>
                 <th onclick="sort('key')">地址 (0x / btc)</th>
                 <th onclick="sort('bal')" style="width:120px;">持仓 ⇵</th>
-                <th onclick="sort('bis_total')" style="width:150px;">BIS SWAP+AMM ⇵<br><span style="font-size:10px;color:#666">转入 / 转出</span></th>
+                <th onclick="sort('bis_swap_net')" style="width:130px;">BIS SWAP ⇵<br><span style="font-size:10px;color:#666">净流入(+/-)</span></th>
+                <th onclick="sort('bis_amm_net')" style="width:130px;">BIS AMM ⇵<br><span style="font-size:10px;color:#666">净流入(+/-)</span></th>
                 <th onclick="sort('total_balance')" style="width:130px;">总和 ⇵</th>
                 <th onclick="sort('pct')" style="width:90px;">占比 % ⇵</th>
                 <th onclick="sort('change')" style="width:130px;">24H 变化 ⇵</th>
@@ -654,25 +690,34 @@ def generate_report(holders, db):
                 chgText = item.change.toLocaleString('en-US', {{maximumFractionDigits: 0}}) + " ▼";
             }}
 
-            // BIS 总转入 = BIS SWAP转入 + BIS AMM转入
-            let bisTotalIn = item.bis_swap_in + item.bis_amm_in;
-            // BIS 总转出 = BIS SWAP转出 + BIS AMM转出
-            let bisTotalOut = item.bis_swap_out + item.bis_amm_out;
-
-            // BIS 显示字符串：+转入 / -转出
-            let bisStr = "";
-            if(bisTotalIn > 0 || bisTotalOut > 0) {{
-                let inStr = bisTotalIn > 0 ? `<span style="color:#4caf50">+${{bisTotalIn.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>` : '<span style="color:#666">0</span>';
-                let outStr = bisTotalOut > 0 ? `<span style="color:#f44336">-${{bisTotalOut.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>` : '<span style="color:#666">0</span>';
-                bisStr = `${{inStr}} / ${{outStr}}`;
+            // BIS SWAP 净流入 = 转入 - 转出
+            let bisSwapNet = item.bis_swap_in - item.bis_swap_out;
+            let bisSwapNetStr = "";
+            if(bisSwapNet > 0) {{
+                bisSwapNetStr = `<span style="color:#4caf50">+${{bisSwapNet.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>`;
+            }} else if(bisSwapNet < 0) {{
+                bisSwapNetStr = `<span style="color:#f44336">${{bisSwapNet.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>`;
             }} else {{
-                bisStr = "-";
+                bisSwapNetStr = '<span style="color:#666">0</span>';
+            }}
+
+            // BIS AMM 净流入 = 转入 - 转出
+            let bisAmmNet = item.bis_amm_in - item.bis_amm_out;
+            let bisAmmNetStr = "";
+            if(bisAmmNet > 0) {{
+                bisAmmNetStr = `<span style="color:#4caf50">+${{bisAmmNet.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>`;
+            }} else if(bisAmmNet < 0) {{
+                bisAmmNetStr = `<span style="color:#f44336">${{bisAmmNet.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>`;
+            }} else {{
+                bisAmmNetStr = '<span style="color:#666">0</span>';
             }}
 
             // 总和 = 持仓 + BIS SWAP净额 + BIS AMM净额
             let totalBalanceStr = item.total_balance.toLocaleString('en-US', {{maximumFractionDigits: 0}});
 
             let tags = "";
+            // 已卖完标签
+            if(item.status === "SOLD_OUT") tags += "<span class='soldout-tag'>💸 已卖完</span>";
             // 流动性提供者标签
             if(item.status === "LP") tags += "<span class='lp-tag'>💧 LP</span>";
             // 交易者标签
@@ -697,7 +742,8 @@ def generate_report(holders, db):
                     <td>#${{item.rank}}</td>
                     <td>${{tags}}<span class="addr-0x">${{item.key}}</span><span class="addr-btc">${{item.btc}}</span></td>
                     <td style="color:#fff;font-weight:bold">${{balStr}}</td>
-                    <td>${{bisStr}}</td>
+                    <td>${{bisSwapNetStr}}</td>
+                    <td>${{bisAmmNetStr}}</td>
                     <td style="color:#00bcd4;font-weight:bold">${{totalBalanceStr}}</td>
                     <td style="color:#aaa">${{pctStr}}</td>
                     <td class="${{chgClass}}">${{chgText}}</td>
@@ -744,12 +790,17 @@ def generate_report(holders, db):
         if(myChart) myChart.destroy();
         const pts = chartData[key];
         if(!pts) return;
+
+        // 计算最大值，用于设置Y轴范围
+        const maxY = Math.max(...pts.map(p=>p.y));
+        const yAxisMax = maxY > 0 ? Math.ceil(maxY * 1.1) : 100;  // 留10%顶部空间
+
         myChart = new Chart(document.getElementById('c'), {{
             type: 'line',
             data: {{
                 labels: pts.map(p=>p.t),
                 datasets: [{{
-                    label: '持仓量',
+                    label: '总持仓量 (包含BIS)',
                     data: pts.map(p=>p.y),
                     borderColor: '#00bcd4',
                     backgroundColor: 'rgba(0,188,212,0.1)',
@@ -760,8 +811,46 @@ def generate_report(holders, db):
             }},
             options: {{
                 maintainAspectRatio: false,
-                plugins: {{ title: {{ display: true, text: '地址: '+key, color:'#fff', font:{{size:16}} }} }},
-                scales: {{ y: {{ grid: {{ color: '#333' }} }} }}
+                plugins: {{
+                    title: {{
+                        display: true,
+                        text: '地址: '+key + ' - 总持仓趋势 (包含BIS SWAP和BIS AMM)',
+                        color:'#fff',
+                        font:{{size:14}}
+                    }},
+                    legend: {{
+                        labels: {{
+                            color: '#ccc'
+                        }}
+                    }}
+                }},
+                scales: {{
+                    y: {{
+                        beginAtZero: true,  // 纵坐标轴从0开始
+                        min: 0,
+                        max: yAxisMax,     // 根据数据动态调整最大值
+                        grid: {{
+                            color: '#333'
+                        }},
+                        ticks: {{
+                            color: '#aaa'
+                        }},
+                        title: {{
+                            display: true,
+                            text: '代币数量',
+                            color: '#888'
+                        }}
+                    }},
+                    x: {{
+                        grid: {{
+                            color: '#333'
+                        }},
+                        ticks: {{
+                            color: '#aaa',
+                            maxTicksLimit: 10
+                        }}
+                    }}
+                }}
             }}
         }});
     }}
