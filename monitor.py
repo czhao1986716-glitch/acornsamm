@@ -459,6 +459,10 @@ def generate_report(holders, db):
         if h['is_mint'] and key != PROJECT_WALLET.lower():
             note = "🎁 [MINT] " + note
 
+        # 计算BIS总转入和总转出（用于显示和排序）
+        bis_total_in = h.get('bis_swap_in', 0) + h.get('bis_amm_in', 0)
+        bis_total_out = h.get('bis_swap_out', 0) + h.get('bis_amm_out', 0)
+
         table_data.append({
             "rank": h['rank'],
             "key": key,
@@ -473,6 +477,7 @@ def generate_report(holders, db):
             "bis_swap_out": h.get('bis_swap_out', 0),
             "bis_amm_in": h.get('bis_amm_in', 0),
             "bis_amm_out": h.get('bis_amm_out', 0),
+            "bis_total": bis_total_in - bis_total_out,  # BIS净额，用于排序
             "total_balance": h['total_balance']  # 总和
         })
 
@@ -536,10 +541,7 @@ def generate_report(holders, db):
                 <th onclick="sort('rank')" style="width:60px;">排名 ⇵</th>
                 <th onclick="sort('key')">地址 (0x / btc)</th>
                 <th onclick="sort('bal')" style="width:120px;">持仓 ⇵</th>
-                <th onclick="sort('bis_swap_in')" style="width:100px;">BIS SWAP<br><span style="font-size:10px;color:#4caf50">(+)</span></th>
-                <th onclick="sort('bis_swap_out')" style="width:100px;">BIS SWAP<br><span style="font-size:10px;color:#f44336">(-)</span></th>
-                <th onclick="sort('bis_amm_in')" style="width:100px;">BIS AMM<br><span style="font-size:10px;color:#4caf50">(+)</span></th>
-                <th onclick="sort('bis_amm_out')" style="width:100px;">BIS AMM<br><span style="font-size:10px;color:#f44336">(-)</span></th>
+                <th onclick="sort('bis_total')" style="width:150px;">BIS SWAP+AMM ⇵<br><span style="font-size:10px;color:#666">转入 / 转出</span></th>
                 <th onclick="sort('total_balance')" style="width:130px;">总和 ⇵</th>
                 <th onclick="sort('pct')" style="width:90px;">占比 % ⇵</th>
                 <th onclick="sort('change')" style="width:130px;">24H 变化 ⇵</th>
@@ -605,14 +607,21 @@ def generate_report(holders, db):
                 chgText = item.change.toLocaleString('en-US', {{maximumFractionDigits: 0}}) + " ▼";
             }}
 
-            // BIS SWAP 转入 (+)
-            let bisSwapInStr = item.bis_swap_in > 0 ? `<span style="color:#4caf50">+${{item.bis_swap_in.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>` : '-';
-            // BIS SWAP 转出 (-)
-            let bisSwapOutStr = item.bis_swap_out > 0 ? `<span style="color:#f44336">-${{item.bis_swap_out.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>` : '-';
-            // BIS AMM 转入 (+)
-            let bisAmmInStr = item.bis_amm_in > 0 ? `<span style="color:#4caf50">+${{item.bis_amm_in.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>` : '-';
-            // BIS AMM 转出 (-)
-            let bisAmmOutStr = item.bis_amm_out > 0 ? `<span style="color:#f44336">-${{item.bis_amm_out.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>` : '-';
+            // BIS 总转入 = BIS SWAP转入 + BIS AMM转入
+            let bisTotalIn = item.bis_swap_in + item.bis_amm_in;
+            // BIS 总转出 = BIS SWAP转出 + BIS AMM转出
+            let bisTotalOut = item.bis_swap_out + item.bis_amm_out;
+
+            // BIS 显示字符串：+转入 / -转出
+            let bisStr = "";
+            if(bisTotalIn > 0 || bisTotalOut > 0) {{
+                let inStr = bisTotalIn > 0 ? `<span style="color:#4caf50">+${{bisTotalIn.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>` : '<span style="color:#666">0</span>';
+                let outStr = bisTotalOut > 0 ? `<span style="color:#f44336">-${{bisTotalOut.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>` : '<span style="color:#666">0</span>';
+                bisStr = `${{inStr}} / ${{outStr}}`;
+            }} else {{
+                bisStr = "-";
+            }}
+
             // 总和 = 持仓 + BIS SWAP净额 + BIS AMM净额
             let totalBalanceStr = item.total_balance.toLocaleString('en-US', {{maximumFractionDigits: 0}});
 
@@ -635,10 +644,7 @@ def generate_report(holders, db):
                     <td>#${{item.rank}}</td>
                     <td>${{tags}}<span class="addr-0x">${{item.key}}</span><span class="addr-btc">${{item.btc}}</span></td>
                     <td style="color:#fff;font-weight:bold">${{balStr}}</td>
-                    <td>${{bisSwapInStr}}</td>
-                    <td>${{bisSwapOutStr}}</td>
-                    <td>${{bisAmmInStr}}</td>
-                    <td>${{bisAmmOutStr}}</td>
+                    <td>${{bisStr}}</td>
                     <td style="color:#00bcd4;font-weight:bold">${{totalBalanceStr}}</td>
                     <td style="color:#aaa">${{pctStr}}</td>
                     <td class="${{chgClass}}">${{chgText}}</td>
