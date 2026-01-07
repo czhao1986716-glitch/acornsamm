@@ -135,22 +135,23 @@ def check_is_truly_new(address):
     except: pass
     return True
 
-# === 核心功能 3: 获取目标地址的所有接收记录 ===
-def get_incoming_transfers(target_address):
+# === 核心功能 3: 获取目标地址的所有转账记录 ===
+def get_transfers(target_address, direction="incoming"):
     """
-    获取目标地址收到的所有 acorns 转账记录
+    获取目标地址的转账记录
     参数：
         target_address: 目标地址（如 bis swap 或 bis amm）
+        direction: "incoming" 接收记录, "outgoing" 发送记录
     返回：
-        字典：{发送方地址: 总数量}
+        字典：{地址: 总数量}
     """
     url = f"{EXPLORER_API}/addresses/{target_address}/token-transfers"
     params = {"token": TOKEN_CONTRACT, "type": "ERC-20", "limit": 100}
     headers = {"User-Agent": "Mozilla/5.0"}
 
-    incoming_data = {}  # {from_address: total_amount}
+    transfer_data = {}  # {address: total_amount}
 
-    print(f"   📡 正在查询: {url}")
+    print(f"   📡 正在查询 {direction}: {url}")
     print(f"   🔑 目标地址: {target_address}")
 
     try:
@@ -198,20 +199,30 @@ def get_incoming_transfers(target_address):
                 if not from_addr or from_addr == '0x0000000000000000000000000000000000000000':
                     continue
 
-                # 只统计发送到目标地址的记录
-                if to_addr != target_address.lower():
-                    continue
-
                 # 计算金额 - API 返回的 value 在 total 对象下
                 total_data = item.get('total', {})
                 amount = float(total_data.get('value', 0) or 0)
                 decimals = int(total_data.get('decimals', 18))
                 actual_amount = amount / (10 ** decimals)
 
+                # 根据方向统计
+                if direction == "incoming":
+                    # 统计发送到目标地址的记录
+                    if to_addr == target_address.lower():
+                        counterparty = from_addr
+                    else:
+                        continue
+                else:  # outgoing
+                    # 统计从目标地址发送出去的记录
+                    if from_addr == target_address.lower():
+                        counterparty = to_addr
+                    else:
+                        continue
+
                 # 累加到字典
-                if from_addr not in incoming_data:
-                    incoming_data[from_addr] = 0.0
-                incoming_data[from_addr] += actual_amount
+                if counterparty not in transfer_data:
+                    transfer_data[counterparty] = 0.0
+                transfer_data[counterparty] += actual_amount
 
             # 翻页逻辑
             if 'next_page_params' in data and data['next_page_params']:
@@ -220,22 +231,23 @@ def get_incoming_transfers(target_address):
                 break
 
         # 统计总金额
-        total_amount = sum(incoming_data.values())
-        print(f"   ✅ {target_address}: 找到 {len(incoming_data)} 个发送地址, 总计 {total_amount:.2f} 代币")
+        total_amount = sum(transfer_data.values())
+        direction_name = "接收" if direction == "incoming" else "发送"
+        print(f"   ✅ {target_address}: 找到 {len(transfer_data)} 个{direction_name}地址, 总计 {total_amount:.2f} 代币")
 
-        # 显示前5个最大的发送方
-        if incoming_data:
-            sorted_senders = sorted(incoming_data.items(), key=lambda x: x[1], reverse=True)[:5]
-            print(f"   📊 前5大发送方:")
-            for addr, amount in sorted_senders:
+        # 显示前5个最大的
+        if transfer_data:
+            sorted_parties = sorted(transfer_data.items(), key=lambda x: x[1], reverse=True)[:5]
+            print(f"   📊 前5大{direction_name}方:")
+            for addr, amount in sorted_parties:
                 print(f"      {addr[:20]}... → {amount:.2f} 代币")
 
     except Exception as e:
-        print(f"   ⚠️ 获取 {target_address} 接收记录失败: {e}")
+        print(f"   ⚠️ 获取 {target_address} {direction}记录失败: {e}")
         import traceback
         traceback.print_exc()
 
-    return incoming_data
+    return transfer_data
 
 # === 保存 BIS 数据到文件 ===
 def save_bis_data(bis_swap_data, bis_amm_data):
@@ -244,21 +256,41 @@ def save_bis_data(bis_swap_data, bis_amm_data):
         "timestamp": datetime.datetime.now(timezone.utc).isoformat(),
         "bis_swap": {
             "address": BIS_SWAP_ADDRESS,
-            "total_senders": len(bis_swap_data),
-            "total_amount": sum(bis_swap_data.values()),
-            "top_senders": [
-                {"address": addr, "amount": amount}
-                for addr, amount in sorted(bis_swap_data.items(), key=lambda x: x[1], reverse=True)[:20]
-            ]
+            "incoming": {
+                "total_senders": len(bis_swap_data.get("incoming", {})),
+                "total_amount": sum(bis_swap_data.get("incoming", {}).values()),
+                "top_senders": [
+                    {"address": addr, "amount": amount}
+                    for addr, amount in sorted(bis_swap_data.get("incoming", {}).items(), key=lambda x: x[1], reverse=True)[:20]
+                ]
+            },
+            "outgoing": {
+                "total_receivers": len(bis_swap_data.get("outgoing", {})),
+                "total_amount": sum(bis_swap_data.get("outgoing", {}).values()),
+                "top_receivers": [
+                    {"address": addr, "amount": amount}
+                    for addr, amount in sorted(bis_swap_data.get("outgoing", {}).items(), key=lambda x: x[1], reverse=True)[:20]
+                ]
+            }
         },
         "bis_amm": {
             "address": BIS_AMM_ADDRESS,
-            "total_senders": len(bis_amm_data),
-            "total_amount": sum(bis_amm_data.values()),
-            "top_senders": [
-                {"address": addr, "amount": amount}
-                for addr, amount in sorted(bis_amm_data.items(), key=lambda x: x[1], reverse=True)[:20]
-            ]
+            "incoming": {
+                "total_senders": len(bis_amm_data.get("incoming", {})),
+                "total_amount": sum(bis_amm_data.get("incoming", {}).values()),
+                "top_senders": [
+                    {"address": addr, "amount": amount}
+                    for addr, amount in sorted(bis_amm_data.get("incoming", {}).items(), key=lambda x: x[1], reverse=True)[:20]
+                ]
+            },
+            "outgoing": {
+                "total_receivers": len(bis_amm_data.get("outgoing", {})),
+                "total_amount": sum(bis_amm_data.get("outgoing", {}).values()),
+                "top_receivers": [
+                    {"address": addr, "amount": amount}
+                    for addr, amount in sorted(bis_amm_data.get("outgoing", {}).items(), key=lambda x: x[1], reverse=True)[:20]
+                ]
+            }
         }
     }
 
@@ -266,20 +298,32 @@ def save_bis_data(bis_swap_data, bis_amm_data):
         json.dump(bis_data, f, indent=2, ensure_ascii=False)
 
     print(f"   💾 BIS 数据已保存到 bis_data_debug.json")
-    print(f"   📊 BIS SWAP: {len(bis_swap_data)} 个发送方, 总计 {sum(bis_swap_data.values()):.2f} 代币")
-    print(f"   📊 BIS AMM: {len(bis_amm_data)} 个发送方, 总计 {sum(bis_amm_data.values()):.2f} 代币")
+    print(f"   📊 BIS SWAP: 转入 {len(bis_swap_data.get('incoming', {}))} 个, 转出 {len(bis_swap_data.get('outgoing', {}))} 个")
+    print(f"   📊 BIS AMM: 转入 {len(bis_amm_data.get('incoming', {}))} 个, 转出 {len(bis_amm_data.get('outgoing', {}))} 个")
 
 # === 主数据抓取 ===
 def fetch_data(minters_set, db_old_keys):
     print(f"🚀 [2/3] 正在下载全量持仓榜...")
 
-    # 1. 先获取 BIS SWAP 和 BIS AMM 的所有接收记录
-    print(f"📊 正在获取 BIS SWAP 和 BIS AMM 接收记录...")
-    bis_swap_incoming = get_incoming_transfers(BIS_SWAP_ADDRESS)
-    bis_amm_incoming = get_incoming_transfers(BIS_AMM_ADDRESS)
+    # 1. 先获取 BIS SWAP 和 BIS AMM 的所有接收和发送记录
+    print(f"📊 正在获取 BIS SWAP 和 BIS AMM 转账记录...")
+
+    # BIS SWAP: 接收记录(用户 deposit)和发送记录(用户 withdraw)
+    bis_swap_incoming = get_transfers(BIS_SWAP_ADDRESS, "incoming")  # +
+    bis_swap_outgoing = get_transfers(BIS_SWAP_ADDRESS, "outgoing")  # -
+
+    # BIS AMM: 接收记录(添加流动性)和发送记录(移除流动性)
+    bis_amm_incoming = get_transfers(BIS_AMM_ADDRESS, "incoming")   # +
+    bis_amm_outgoing = get_transfers(BIS_AMM_ADDRESS, "outgoing")    # -
 
     # 保存 BIS 数据到文件（用于调试）
-    save_bis_data(bis_swap_incoming, bis_amm_incoming)
+    save_bis_data({
+        "incoming": bis_swap_incoming,
+        "outgoing": bis_swap_outgoing
+    }, {
+        "incoming": bis_amm_incoming,
+        "outgoing": bis_amm_outgoing
+    })
 
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
@@ -305,11 +349,19 @@ def fetch_data(minters_set, db_old_keys):
                 # 2. 计算占比
                 percent = (bal / TOTAL_SUPPLY) * 100
 
-                # 3. 从预先获取的数据中查找该地址的发送量
-                bis_swap_amount = bis_swap_incoming.get(key, 0)
-                bis_amm_amount = bis_amm_incoming.get(key, 0)
+                # 3. 获取 BIS 转账数据
+                bis_swap_in = bis_swap_incoming.get(key, 0)
+                bis_swap_out = bis_swap_outgoing.get(key, 0)
+                bis_amm_in = bis_amm_incoming.get(key, 0)
+                bis_amm_out = bis_amm_outgoing.get(key, 0)
 
-                # 4. 初步判断是否为新人
+                # 4. 计算总和：持仓 + BIS SWAP(净流入) + BIS AMM(净流入)
+                # 净流入 = 转入 - 转出
+                bis_swap_net = bis_swap_in - bis_swap_out
+                bis_amm_net = bis_amm_in - bis_amm_out
+                total_balance = bal + bis_swap_net + bis_amm_net
+
+                # 5. 初步判断是否为新人
                 is_potential_new = (key not in db_old_keys) and (len(db_old_keys) > 0)
 
                 status = ""
@@ -325,8 +377,11 @@ def fetch_data(minters_set, db_old_keys):
                     "pct": percent,
                     "is_mint": is_mint,
                     "status": status,
-                    "bis_swap": bis_swap_amount,
-                    "bis_amm": bis_amm_amount
+                    "bis_swap_in": bis_swap_in,
+                    "bis_swap_out": bis_swap_out,
+                    "bis_amm_in": bis_amm_in,
+                    "bis_amm_out": bis_amm_out,
+                    "total_balance": total_balance  # 新增：总和
                 })
 
         # === 批量验真 ===
@@ -371,7 +426,7 @@ def generate_report(holders, db):
         if key not in db: db[key] = []
         history = db[key]
 
-        # 历史记录逻辑
+        # 历史记录逻辑 - 使用 total_balance 而不是 bal
         if not history or history[-1]['t'] != today_str:
             if history:
                 try:
@@ -383,16 +438,19 @@ def generate_report(holders, db):
                             d = (last + timedelta(days=i)).strftime("%Y-%m-%d")
                             history.append({"t": d, "y": history[-1]['y']})
                 except: pass
-            history.append({"t": today_str, "y": h['bal']})
+            # 存储总和（持仓 + BIS SWAP净流入 + BIS AMM净流入）
+            history.append({"t": today_str, "y": h['total_balance']})
         else:
-            history[-1]['y'] = h['bal']
+            # 更新今天的值
+            history[-1]['y'] = h['total_balance']
 
         if len(history) > 180: history = history[-180:]
         db[key] = history
 
+        # 24H变化 - 基于总和计算
         change = 0
         if len(history) >= 2:
-            raw_change = h['bal'] - history[-2]['y']
+            raw_change = h['total_balance'] - history[-2]['y']
             if abs(raw_change) >= 1: change = raw_change
 
         chart_data[key] = history
@@ -405,14 +463,17 @@ def generate_report(holders, db):
             "rank": h['rank'],
             "key": key,
             "btc": h['btc'],
-            "bal": h['bal'],
+            "bal": h['bal'],  # 原始持仓
             "pct": h['pct'],
-            "change": change,
+            "change": change,  # 基于 total_balance 的24H变化
             "note": note,
             "status": h['status'],
             "is_new_day": (len(history) == 1),
-            "bis_swap": h.get('bis_swap', 0),
-            "bis_amm": h.get('bis_amm', 0)
+            "bis_swap_in": h.get('bis_swap_in', 0),
+            "bis_swap_out": h.get('bis_swap_out', 0),
+            "bis_amm_in": h.get('bis_amm_in', 0),
+            "bis_amm_out": h.get('bis_amm_out', 0),
+            "total_balance": h['total_balance']  # 总和
         })
 
     save_db(db)
@@ -462,17 +523,27 @@ def generate_report(holders, db):
         <input type="text" id="search" placeholder="🔍 搜索地址 / MINT / NEW / 备注..." onkeyup="render()">
     </div>
 
+    <div class="controls" style="margin-top: 15px;">
+        <button class="btn" onclick="changePageSize()">📄 每页显示: <span id="pageSizeLabel">100</span></button>
+        <span id="pageInfo" style="margin-left: 20px; color: #aaa;"></span>
+        <button class="btn" onclick="prevPage()" style="margin-left: 10px;">⬅️ 上一页</button>
+        <button class="btn" onclick="nextPage()" style="margin-left: 5px;">➡️ 下一页</button>
+    </div>
+
     <table>
         <thead>
             <tr>
-                <th onclick="sort('rank')">排名 ⇵</th>
+                <th onclick="sort('rank')" style="width:60px;">排名 ⇵</th>
                 <th onclick="sort('key')">地址 (0x / btc)</th>
-                <th onclick="sort('bal')">持仓 ⇵</th>
-                <th onclick="sort('bis_swap')">BIS SWAP ⇵</th>
-                <th onclick="sort('bis_amm')">BIS AMM ⇵</th>
-                <th onclick="sort('pct')">占比 % ⇵</th>
-                <th onclick="sort('change')">24H 变化 ⇵</th>
-                <th>趋势</th>
+                <th onclick="sort('bal')" style="width:120px;">持仓 ⇵</th>
+                <th onclick="sort('bis_swap_in')" style="width:100px;">BIS SWAP<br><span style="font-size:10px;color:#4caf50">(+)</span></th>
+                <th onclick="sort('bis_swap_out')" style="width:100px;">BIS SWAP<br><span style="font-size:10px;color:#f44336">(-)</span></th>
+                <th onclick="sort('bis_amm_in')" style="width:100px;">BIS AMM<br><span style="font-size:10px;color:#4caf50">(+)</span></th>
+                <th onclick="sort('bis_amm_out')" style="width:100px;">BIS AMM<br><span style="font-size:10px;color:#f44336">(-)</span></th>
+                <th onclick="sort('total_balance')" style="width:130px;">总和 ⇵</th>
+                <th onclick="sort('pct')" style="width:90px;">占比 % ⇵</th>
+                <th onclick="sort('change')" style="width:130px;">24H 变化 ⇵</th>
+                <th style="width:60px;">趋势</th>
             </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -483,27 +554,45 @@ def generate_report(holders, db):
     <script>
     let rawData = {json_table};
     const chartData = {json_chart};
-    let sortCol = 'bal';
+    let sortCol = 'total_balance';  // 默认按总和排序
     let sortDesc = true;
+
+    // 分页配置
+    let currentPage = 1;
+    let pageSize = 100;
+    let filteredAndSortedData = [];  // 缓存过滤和排序后的数据
 
     function render() {{
         const tbody = document.getElementById('tbody');
         const search = document.getElementById('search').value.toLowerCase();
 
-        let data = rawData.filter(item =>
+        // 过滤数据
+        filteredAndSortedData = rawData.filter(item =>
             item.key.includes(search) || item.btc.includes(search) || item.note.toLowerCase().includes(search) || item.status.toLowerCase().includes(search)
         );
-        document.getElementById('count').innerText = data.length;
 
-        data.sort((a, b) => {{
+        document.getElementById('count').innerText = filteredAndSortedData.length;
+
+        // 排序数据（只在排序时执行一次）
+        filteredAndSortedData.sort((a, b) => {{
             let valA = a[sortCol];
             let valB = b[sortCol];
             if (typeof valA === 'string') return sortDesc ? valB.localeCompare(valA) : valA.localeCompare(valB);
             return sortDesc ? (valB - valA) : (valA - valB);
         }});
 
+        // 分页
+        const totalPages = Math.ceil(filteredAndSortedData.length / pageSize);
+        if(currentPage > totalPages) currentPage = Math.max(1, totalPages);
+        const startIdx = (currentPage - 1) * pageSize;
+        const endIdx = startIdx + pageSize;
+        const pageData = filteredAndSortedData.slice(startIdx, endIdx);
+
+        // 更新分页信息
+        document.getElementById('pageInfo').innerText = `第 ${{currentPage}} / ${{totalPages || 1}} 页 (共 ${{filteredAndSortedData.length}} 条)`;
+
         let html = [];
-        data.forEach(item => {{
+        pageData.forEach(item => {{
             let balStr = item.bal.toLocaleString('en-US', {{maximumFractionDigits: 0}});
             let pctStr = item.pct.toFixed(2) + "%";
             let chgClass = "flat", chgText = "-";
@@ -515,6 +604,17 @@ def generate_report(holders, db):
                 chgClass="down";
                 chgText = item.change.toLocaleString('en-US', {{maximumFractionDigits: 0}}) + " ▼";
             }}
+
+            // BIS SWAP 转入 (+)
+            let bisSwapInStr = item.bis_swap_in > 0 ? `<span style="color:#4caf50">+${{item.bis_swap_in.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>` : '-';
+            // BIS SWAP 转出 (-)
+            let bisSwapOutStr = item.bis_swap_out > 0 ? `<span style="color:#f44336">-${{item.bis_swap_out.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>` : '-';
+            // BIS AMM 转入 (+)
+            let bisAmmInStr = item.bis_amm_in > 0 ? `<span style="color:#4caf50">+${{item.bis_amm_in.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>` : '-';
+            // BIS AMM 转出 (-)
+            let bisAmmOutStr = item.bis_amm_out > 0 ? `<span style="color:#f44336">-${{item.bis_amm_out.toLocaleString('en-US', {{maximumFractionDigits: 0}})}}</span>` : '-';
+            // 总和 = 持仓 + BIS SWAP净额 + BIS AMM净额
+            let totalBalanceStr = item.total_balance.toLocaleString('en-US', {{maximumFractionDigits: 0}});
 
             let tags = "";
             if(item.status === "NEW") tags += "<span class='new-tag'>🔥 NEW</span>";
@@ -535,8 +635,11 @@ def generate_report(holders, db):
                     <td>#${{item.rank}}</td>
                     <td>${{tags}}<span class="addr-0x">${{item.key}}</span><span class="addr-btc">${{item.btc}}</span></td>
                     <td style="color:#fff;font-weight:bold">${{balStr}}</td>
-                    <td style="color:#4caf50">${{item.bis_swap > 0 ? item.bis_swap.toLocaleString('en-US', {{maximumFractionDigits: 0}}) : '-'}}</td>
-                    <td style="color:#2196f3">${{item.bis_amm > 0 ? item.bis_amm.toLocaleString('en-US', {{maximumFractionDigits: 0}}) : '-'}}</td>
+                    <td>${{bisSwapInStr}}</td>
+                    <td>${{bisSwapOutStr}}</td>
+                    <td>${{bisAmmInStr}}</td>
+                    <td>${{bisAmmOutStr}}</td>
+                    <td style="color:#00bcd4;font-weight:bold">${{totalBalanceStr}}</td>
                     <td style="color:#aaa">${{pctStr}}</td>
                     <td class="${{chgClass}}">${{chgText}}</td>
                     <td><button class="btn" onclick="show('${{item.key}}')">📈</button></td>
@@ -544,6 +647,30 @@ def generate_report(holders, db):
             `);
         }});
         tbody.innerHTML = html.join('');
+    }}
+
+    function changePageSize() {{
+        const sizes = [50, 100, 200, 500];
+        const currentIdx = sizes.indexOf(pageSize);
+        pageSize = sizes[(currentIdx + 1) % sizes.length];
+        document.getElementById('pageSizeLabel').innerText = pageSize;
+        currentPage = 1;
+        render();
+    }}
+
+    function prevPage() {{
+        if(currentPage > 1) {{
+            currentPage--;
+            render();
+        }}
+    }}
+
+    function nextPage() {{
+        const totalPages = Math.ceil(filteredAndSortedData.length / pageSize);
+        if(currentPage < totalPages) {{
+            currentPage++;
+            render();
+        }}
     }}
 
     function sort(col) {{
