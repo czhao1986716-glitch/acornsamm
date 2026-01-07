@@ -457,7 +457,218 @@ def fetch_data(minters_set, db_old_keys):
         print(f"❌ 错误: {e}")
         return []
 
-def generate_report(holders, db):
+def analyze_health_metrics(holders, db, minters_set):
+    """
+    分析项目健康度指标
+    返回包含所有分析结果的字典
+    """
+    tz_cn = timezone(timedelta(hours=8))
+    today_str = datetime.datetime.now(tz_cn).strftime("%Y-%m-%d")
+
+    # === 1. 持仓集中度分析 ===
+    print(f"\n📊 [健康度分析] 正在计算持仓集中度...")
+
+    # 按持仓排序
+    sorted_holders = sorted(holders, key=lambda x: x['total_balance'], reverse=True)
+
+    # 计算前10/100/1000地址的持仓占比
+    total_supply = TOTAL_SUPPLY
+    top10_balance = sum(h['total_balance'] for h in sorted_holders[:10])
+    top100_balance = sum(h['total_balance'] for h in sorted_holders[:100])
+    top1000_balance = sum(h['total_balance'] for h in sorted_holders[:1000])
+
+    top10_ratio = (top10_balance / total_supply * 100) if total_supply > 0 else 0
+    top100_ratio = (top100_balance / total_supply * 100) if total_supply > 0 else 0
+    top1000_ratio = (top1000_balance / total_supply * 100) if total_supply > 0 else 0
+
+    # Gini系数（财富不平等指数）
+    balances = [h['total_balance'] for h in holders if h['total_balance'] > 0]
+    n = len(balances)
+    gini = 0
+    if n > 0:
+        sorted_balances = sorted(balances)
+        cum_income = [0]
+        for b in sorted_balances:
+            cum_income.append(cum_income[-1] + b)
+        gini = 1 - (2 / (n * sum(sorted_balances))) * sum((n + 1 - (i + 1)) * b for i, b in enumerate(sorted_balances))
+
+    print(f"   ✅ 前10地址占比: {top10_ratio:.2f}%")
+    print(f"   ✅ 前100地址占比: {top100_ratio:.2f}%")
+    print(f"   ✅ Gini系数: {gini:.3f} (0=完全平等, 1=完全不平等)")
+
+    # === 2. 新增地址趋势 ===
+    print(f"\n📈 [健康度分析] 正在分析新增地址趋势...")
+
+    # 统计过去7天、30天的新增地址
+    seven_days_ago = (datetime.datetime.now(tz_cn) - timedelta(days=7)).strftime("%Y-%m-%d")
+    thirty_days_ago = (datetime.datetime.now(tz_cn) - timedelta(days=30)).strftime("%Y-%m-%d")
+
+    new_addresses_7d = 0
+    new_addresses_30d = 0
+    active_addresses = 0  # 有余额变动的地址
+
+    for key, history in db.items():
+        if history:
+            first_date = history[0]['t']
+            if first_date >= thirty_days_ago:
+                new_addresses_30d += 1
+                if first_date >= seven_days_ago:
+                    new_addresses_7d += 1
+
+            # 检查是否活跃（最近7天有余额变动）
+            recent_history = [h for h in history if h['t'] >= seven_days_ago]
+            if len(recent_history) >= 2:
+                active_addresses += 1
+
+    total_addresses = len(db.keys())
+    active_ratio = (active_addresses / total_addresses * 100) if total_addresses > 0 else 0
+
+    print(f"   ✅ 总地址数: {total_addresses}")
+    print(f"   ✅ 7日新增: {new_addresses_7d}")
+    print(f"   ✅ 30日新增: {new_addresses_30d}")
+    print(f"   ✅ 活跃地址: {active_addresses} ({active_ratio:.2f}%)")
+
+    # === 3. Mint地址留存率 ===
+    print(f"\n💎 [健康度分析] 正在分析Mint地址留存率...")
+
+    mint_holders = 0
+    for addr in minters_set:
+        if addr in db and db[addr]:
+            current_balance = db[addr][-1]['y']
+            if current_balance > 0:
+                mint_holders += 1
+
+    total_minters = len(minters_set)
+    mint_retention = (mint_holders / total_minters * 100) if total_minters > 0 else 0
+
+    print(f"   ✅ Mint地址总数: {total_minters}")
+    print(f"   ✅ 当前仍持有: {mint_holders}")
+    print(f"   ✅ 留存率: {mint_retention:.2f}%")
+
+    # === 4. 健康度评分 ===
+    print(f"\n🏥 [健康度分析] 正在计算综合健康度评分...")
+
+    score = 100
+    score_details = []
+
+    # 集中度评分 (30分)
+    if top10_ratio <= 30:
+        concentration_score = 30
+        score_details.append("✅ 集中度: 优秀 (前10<30%)")
+    elif top10_ratio <= 50:
+        concentration_score = 20
+        score_details.append("⚠️ 集中度: 良好 (前10<50%)")
+    elif top10_ratio <= 70:
+        concentration_score = 10
+        score_details.append("⚠️ 集中度: 较高 (前10<70%)")
+    else:
+        concentration_score = 0
+        score_details.append("❌ 集中度: 危险 (前10>70%)")
+    score += concentration_score - 30
+
+    # 活跃度评分 (25分)
+    if active_ratio >= 30:
+        activity_score = 25
+        score_details.append("✅ 活跃度: 优秀 (>30%)")
+    elif active_ratio >= 20:
+        activity_score = 15
+        score_details.append("⚠️ 活跃度: 良好 (>20%)")
+    elif active_ratio >= 10:
+        activity_score = 5
+        score_details.append("⚠️ 活跃度: 一般 (>10%)")
+    else:
+        activity_score = 0
+        score_details.append("❌ 活跃度: 较低 (<10%)")
+    score += activity_score - 25
+
+    # Mint留存率评分 (25分)
+    if mint_retention >= 50:
+        retention_score = 25
+        score_details.append("✅ Mint留存: 优秀 (>50%)")
+    elif mint_retention >= 30:
+        retention_score = 15
+        score_details.append("⚠️ Mint留存: 良好 (>30%)")
+    elif mint_retention >= 10:
+        retention_score = 5
+        score_details.append("⚠️ Mint留存: 一般 (>10%)")
+    else:
+        retention_score = 0
+        score_details.append("❌ Mint留存: 较低 (<10%)")
+    score += retention_score - 25
+
+    # 增长趋势评分 (20分)
+    if new_addresses_7d >= 10:
+        growth_score = 20
+        score_details.append("✅ 增长趋势: 优秀 (7日新增>10)")
+    elif new_addresses_7d >= 5:
+        growth_score = 10
+        score_details.append("⚠️ 增长趋势: 良好 (7日新增>5)")
+    elif new_addresses_7d >= 1:
+        growth_score = 5
+        score_details.append("⚠️ 增长趋势: 缓慢 (7日新增>1)")
+    else:
+        growth_score = 0
+        score_details.append("❌ 增长趋势: 停滞 (7日新增=0)")
+    score += growth_score - 20
+
+    # 确保分数在0-100之间
+    score = max(0, min(100, score))
+
+    # 评级
+    if score >= 80:
+        grade = "A"
+        grade_desc = "优秀"
+        color = "🟢"
+    elif score >= 60:
+        grade = "B"
+        grade_desc = "良好"
+        color = "🟡"
+    elif score >= 40:
+        grade = "C"
+        grade_desc = "一般"
+        color = "🟠"
+    else:
+        grade = "D"
+        grade_desc = "较差"
+        color = "🔴"
+
+    print(f"\n{'='*60}")
+    print(f"🎯 综合健康度评分: {score}/100 {color} [{grade}级 - {grade_desc}]")
+    for detail in score_details:
+        print(f"   {detail}")
+    print(f"{'='*60}\n")
+
+    # 返回所有分析结果
+    return {
+        "timestamp": datetime.datetime.now(tz_cn).isoformat(),
+        "date": today_str,
+        "score": score,
+        "grade": grade,
+        "grade_desc": grade_desc,
+        "score_details": score_details,
+        "metrics": {
+            "concentration": {
+                "top10_ratio": round(top10_ratio, 2),
+                "top100_ratio": round(top100_ratio, 2),
+                "top1000_ratio": round(top1000_ratio, 2),
+                "gini": round(gini, 3)
+            },
+            "activity": {
+                "total_addresses": total_addresses,
+                "active_addresses": active_addresses,
+                "active_ratio": round(active_ratio, 2),
+                "new_addresses_7d": new_addresses_7d,
+                "new_addresses_30d": new_addresses_30d
+            },
+            "mint_retention": {
+                "total_minters": total_minters,
+                "mint_holders": mint_holders,
+                "retention_rate": round(mint_retention, 2)
+            }
+        }
+    }
+
+def generate_report(holders, db, health_report=None):
     chart_data = {}
 
     # === 北京时间修正 (UTC+8) ===
@@ -565,6 +776,7 @@ def generate_report(holders, db):
     # === HTML 生成 ===
     json_chart = json.dumps(chart_data)
     json_table = json.dumps(table_data)
+    json_health = json.dumps(health_report) if health_report else "null"
 
     # === 北京时间显示 ===
     now = datetime.datetime.now(tz_cn).strftime("%Y-%m-%d %H:%M")
@@ -598,6 +810,21 @@ def generate_report(holders, db):
 
         .btn{{background:#333;border:1px solid #555;color:#fff;cursor:pointer;padding:4px 8px;border-radius:4px}}
 
+        /* 健康度面板样式 */
+        .health-panel{{background:#1e1e1e;border:2px solid #333;border-radius:8px;padding:20px;margin:20px 0;}}
+        .health-title{{font-size:18px;font-weight:bold;margin-bottom:15px;text-align:center;color:#00bcd4}}
+        .health-score{{text-align:center;margin:20px 0;}}
+        .score-circle{{display:inline-block;width:120px;height:120px;border-radius:50%;border:6px solid #00bcd4;text-align:center;line-height:108px;font-size:36px;font-weight:bold;}}
+        .score-a{{border-color:#4caf50;color:#4caf50}}
+        .score-b{{border-color:#ffeb3b;color:#ffeb3b}}
+        .score-c{{border-color:#ff9800;color:#ff9800}}
+        .score-d{{border-color:#f44336;color:#f44336}}
+        .health-metrics{{display:grid;grid-template-columns:repeat(auto-fit, minmax(250px, 1fr));gap:15px;margin-top:20px}}
+        .metric-card{{background:#252525;padding:15px;border-radius:6px;border-left:4px solid #00bcd4}}
+        .metric-label{{font-size:12px;color:#888;margin-bottom:5px}}
+        .metric-value{{font-size:20px;font-weight:bold;color:#fff}}
+        .metric-sub{{font-size:11px;color:#666;margin-top:3px}}
+
         #modal{{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:999}}
         .box{{background:#222;margin:5% auto;width:90%;max-width:900px;height:500px;padding:20px;border-radius:8px;position:relative}}
         .close{{position:absolute;top:10px;right:15px;font-size:24px;cursor:pointer;color:#fff}}
@@ -605,6 +832,18 @@ def generate_report(holders, db):
 
     <h1>🌰 ACORNS V35+ (终极融合版)</h1>
     <div class="info">总人数: <span id="count">{len(holders)}</span> | 更新: {now} (北京时间)</div>
+
+    <!-- 健康度面板 -->
+    <div class="health-panel" id="healthPanel" style="display:none;">
+        <div class="health-title">🏥 项目健康度分析</div>
+        <div class="health-score">
+            <div class="score-circle" id="scoreCircle">--</div>
+            <div style="margin-top:10px;font-size:14px;color:#888;" id="scoreGrade">分析中...</div>
+        </div>
+        <div class="health-metrics" id="healthMetrics">
+            <!-- 动态生成指标卡片 -->
+        </div>
+    </div>
 
     <div class="controls">
         <input type="text" id="search" placeholder="🔍 搜索地址 / LP / TRADER / MINT / NEW / 备注..." onkeyup="render()">
@@ -639,6 +878,7 @@ def generate_report(holders, db):
     <script>
     let rawData = {json_table};
     const chartData = {json_chart};
+    const healthData = {json_health};  // 健康度数据
     let sortCol = 'total_balance';  // 默认按总和排序
     let sortDesc = true;
 
@@ -646,6 +886,89 @@ def generate_report(holders, db):
     let currentPage = 1;
     let pageSize = 100;
     let filteredAndSortedData = [];  // 缓存过滤和排序后的数据
+
+    // 显示健康度面板
+    function displayHealthPanel() {{
+        if (!healthData) return;
+
+        const panel = document.getElementById('healthPanel');
+        const scoreCircle = document.getElementById('scoreCircle');
+        const scoreGrade = document.getElementById('scoreGrade');
+        const metricsDiv = document.getElementById('healthMetrics');
+
+        // 显示面板
+        panel.style.display = 'block';
+
+        // 设置评分圆圈
+        const score = healthData.score;
+        const grade = healthData.grade;
+        const gradeDesc = healthData.grade_desc;
+
+        scoreCircle.textContent = score;
+        scoreCircle.className = 'score-circle score-' + grade.toLowerCase();
+        scoreGrade.textContent = `${{
+            'A': '🟢 优秀 - A级',
+            'B': '🟡 良好 - B级',
+            'C': '🟠 一般 - C级',
+            'D': '🔴 较差 - D级'
+        }}[grade] || `${{grade}}级 - ${{gradeDesc}}`;
+
+        // 生成指标卡片
+        const metrics = healthData.metrics;
+        let metricCards = '';
+
+        // 集中度指标
+        metricCards += `
+            <div class="metric-card">
+                <div class="metric-label">📊 持仓集中度</div>
+                <div class="metric-value">${{metrics.concentration.top10_ratio}}%</div>
+                <div class="metric-sub">前10地址占比</div>
+                <div class="metric-sub">前100: ${{metrics.concentration.top100_ratio}}% | Gini: ${{metrics.concentration.gini}}</div>
+            </div>
+        `;
+
+        // 活跃度指标
+        const activeColor = metrics.activity.active_ratio >= 30 ? '#4caf50' : metrics.activity.active_ratio >= 20 ? '#ff9800' : '#f44336';
+        metricCards += `
+            <div class="metric-card" style="border-left-color:${{activeColor}}">
+                <div class="metric-label">👥 地址活跃度</div>
+                <div class="metric-value">${{metrics.activity.active_ratio}}%</div>
+                <div class="metric-sub">活跃/总地址: ${{metrics.activity.active_addresses}}/${{metrics.activity.total_addresses}}</div>
+                <div class="metric-sub">7日新增: ${{metrics.activity.new_addresses_7d}} | 30日: ${{metrics.activity.new_addresses_30d}}</div>
+            </div>
+        `;
+
+        // Mint留存率指标
+        const retentionColor = metrics.mint_retention.retention_rate >= 50 ? '#4caf50' : metrics.mint_retention.retention_rate >= 30 ? '#ff9800' : '#f44336';
+        metricCards += `
+            <div class="metric-card" style="border-left-color:${{retentionColor}}">
+                <div class="metric-label">💎 Mint留存率</div>
+                <div class="metric-value">${{metrics.mint_retention.retention_rate}}%</div>
+                <div class="metric-sub">当前持有/总Mint: ${{metrics.mint_retention.mint_holders}}/${{metrics.mint_retention.total_minters}}</div>
+            </div>
+        `;
+
+        // 风险提示
+        let riskLevel = '低';
+        let riskColor = '#4caf50';
+        if (metrics.concentration.top10_ratio > 70) {{
+            riskLevel = '高';
+            riskColor = '#f44336';
+        }} else if (metrics.concentration.top10_ratio > 50) {{
+            riskLevel = '中';
+            riskColor = '#ff9800';
+        }}
+
+        metricCards += `
+            <div class="metric-card" style="border-left-color:${{riskColor}}">
+                <div class="metric-label">⚠️ 风险评估</div>
+                <div class="metric-value" style="color:${{riskColor}}">${{riskLevel}}</div>
+                <div class="metric-sub">基于集中度、活跃度综合评估</div>
+            </div>
+        `;
+
+        metricsDiv.innerHTML = metricCards;
+    }}
 
     function render() {{
         const tbody = document.getElementById('tbody');
@@ -856,6 +1179,10 @@ def generate_report(holders, db):
     }}
 
     window.onclick = function(e){{if(e.target==document.getElementById('modal'))document.getElementById('modal').style.display='none';}}
+
+    // 初始化健康度面板
+    displayHealthPanel();
+
     render();
     </script>
     </body></html>
@@ -870,8 +1197,16 @@ if __name__ == "__main__":
     holders = fetch_data(minters_set, db.keys())
 
     if holders:
-        path = generate_report(holders, db)
+        # 进行健康度分析
+        health_report = analyze_health_metrics(holders, db, minters_set)
+
+        # 保存健康度报告到 JSON 文件
+        with open('health_report.json', 'w', encoding='utf-8') as f:
+            json.dump(health_report, f, indent=2, ensure_ascii=False)
+        print(f"✅ 健康度报告已保存: health_report.json")
+
+        # 生成可视化报告
+        path = generate_report(holders, db, health_report)
         print(f"✅ 报告已生成: {path}")
-        # 注意: webbrowser 已移除，适合 GitHub Actions
     else:
         print("❌ 抓取失败。")
