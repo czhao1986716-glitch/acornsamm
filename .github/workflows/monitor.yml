@@ -2,8 +2,7 @@ name: ACORNS Monitor
 
 on:
   schedule:
-    # 北京时间每天 00:00 更新 (UTC 时间 = 北京时间 - 8小时)
-    - cron: '0 16 * * *'  # 北京时间 00:00 (UTC 时间前一天 16:00)
+    - cron: '0 1 * * *'
   workflow_dispatch:
 
 permissions:
@@ -34,7 +33,7 @@ jobs:
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
-        git add acorns_monitor_v35_plus.html acorns_light_db.json bis_data_debug.json health_report.json
+        git add acorns_monitor_v35_plus.html acorns_light_db.json bis_data_debug.json
         git diff --staged --quiet || git commit -m "Auto update monitor report [skip ci]"
         git push
 
