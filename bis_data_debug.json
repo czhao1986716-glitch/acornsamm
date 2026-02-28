@@ -1,14 +1,14 @@
 {
-  "timestamp": "2026-02-27T03:35:45.471687+00:00",
+  "timestamp": "2026-02-28T03:15:23.416863+00:00",
   "bis_swap": {
     "address": "0x62879BB3dD949c4CF06f71BF7c281DcF24D163e7",
     "incoming": {
       "total_senders": 125,
-      "total_amount": 77222596.44861236,
+      "total_amount": 77302596.44861236,
       "top_senders": [
         {
           "address": "0x17dbb1fa0c7a70db033e91d080ed0b87bc6bd542",
-          "amount": 23453509.6110693
+          "amount": 23533509.6110693
         },
         {
           "address": "0x4fe6a1dad4711a08e7cde7a6ec17f3c33ed1ed29",
@@ -90,11 +90,11 @@
     },
     "outgoing": {
       "total_receivers": 33,
-      "total_amount": 49215223.48210437,
+      "total_amount": 49295223.48210437,
       "top_receivers": [
         {
           "address": "0x17dbb1fa0c7a70db033e91d080ed0b87bc6bd542",
-          "amount": 25890153.04849764
+          "amount": 25970153.04849764
         },
         {
           "address": "0x4fe6a1dad4711a08e7cde7a6ec17f3c33ed1ed29",
@@ -179,21 +179,21 @@
     "address": "0x17DBb1fA0c7A70dB033E91d080ed0b87bc6Bd542",
     "incoming": {
       "total_senders": 1,
-      "total_amount": 25890153.04849764,
+      "total_amount": 25970153.04849764,
       "top_senders": [
         {
           "address": "0x62879bb3dd949c4cf06f71bf7c281dcf24d163e7",
-          "amount": 25890153.04849764
+          "amount": 25970153.04849764
         }
       ]
     },
     "outgoing": {
       "total_receivers": 1,
-      "total_amount": 23453509.6110693,
+      "total_amount": 23533509.6110693,
       "top_receivers": [
         {
           "address": "0x62879bb3dd949c4cf06f71bf7c281dcf24d163e7",
-          "amount": 23453509.6110693
+          "amount": 23533509.6110693
         }
       ]
     }
@@ -204,8 +204,8 @@
       {
         "address": "0x62879bb3dd949c4cf06f71bf7c281dcf24d163e7",
         "net_inflow": 2436643.4374283403,
-        "total_in": 25890153.04849764,
-        "total_out": 23453509.6110693
+        "total_in": 25970153.04849764,
+        "total_out": 23533509.6110693
       }
     ]
   }
