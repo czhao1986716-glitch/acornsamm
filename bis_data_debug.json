@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-04-28T04:39:42.679739+00:00",
+  "timestamp": "2026-04-29T04:36:02.702293+00:00",
   "bis_swap": {
     "address": "0x62879BB3dD949c4CF06f71BF7c281DcF24D163e7",
     "incoming": {
-      "total_senders": 132,
-      "total_amount": 95720031.15141667,
+      "total_senders": 133,
+      "total_amount": 95965681.21391667,
       "top_senders": [
         {
           "address": "0x17dbb1fa0c7a70db033e91d080ed0b87bc6bd542",
