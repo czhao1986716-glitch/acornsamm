@@ -1,14 +1,22 @@
 {
-  "timestamp": "2026-06-10T05:23:11.623881+00:00",
+  "timestamp": "2026-06-11T05:54:18.810465+00:00",
   "bis_swap": {
     "address": "0x62879BB3dD949c4CF06f71BF7c281DcF24D163e7",
     "incoming": {
-      "total_senders": 55,
-      "total_amount": 80361341.71222813,
+      "total_senders": 138,
+      "total_amount": 110112855.03939083,
       "top_senders": [
         {
           "address": "0x17dbb1fa0c7a70db033e91d080ed0b87bc6bd542",
-          "amount": 35679639.37001966
+          "amount": 40980502.96705467
+        },
+        {
+          "address": "0x4fe6a1dad4711a08e7cde7a6ec17f3c33ed1ed29",
+          "amount": 11999363.0
+        },
+        {
+          "address": "0x131bd61cd40ba3163faed61c783f221d97cc138e",
+          "amount": 7605344.0
         },
         {
           "address": "0x5df4331ac057f328b88be7c7f57f109c19bd319f",
@@ -19,24 +27,28 @@
           "amount": 4850124.0
         },
         {
-          "address": "0x131bd61cd40ba3163faed61c783f221d97cc138e",
-          "amount": 4365276.0
-        },
-        {
-          "address": "0x4fe6a1dad4711a08e7cde7a6ec17f3c33ed1ed29",
-          "amount": 3504432.9999999995
-        },
-        {
           "address": "0x5fdc84e2634d158df9b6a5a83614b4bcef1c1e11",
           "amount": 2444162.8200000003
+        },
+        {
+          "address": "0xd06a6feec80e8b2cc6eb48f6b85b216a6da4bd23",
+          "amount": 1973377.0
         },
         {
           "address": "0x14b2a1c8481ec0b92368cf6e984177f6deef1ab2",
           "amount": 1947804.1004147362
         },
         {
+          "address": "0x25796a69c402fe520b5f29d93143afc8b686369a",
+          "amount": 1735808.361568713
+        },
+        {
           "address": "0x4a70dddfe2da8b74e0e53474842e0688f7682a21",
           "amount": 1715857.55407
+        },
+        {
+          "address": "0xe94c030afd5d99554e82c9ccdde6b1876d520d93",
+          "amount": 1519837.3373804288
         },
         {
           "address": "0xfc25c2ae17de4f52061d678b7df997b515f73d10",
@@ -45,10 +57,6 @@
         {
           "address": "0x34d2fd89a650c63a1fe23c060a46474c3663f0ca",
           "amount": 1400000.0
-        },
-        {
-          "address": "0xe94c030afd5d99554e82c9ccdde6b1876d520d93",
-          "amount": 1254837.3373804288
         },
         {
           "address": "0x29b5591a0891d528929f6acf502c14463a746ba6",
@@ -67,24 +75,16 @@
           "amount": 1026485.0
         },
         {
+          "address": "0xe927a1e27240037af8efa44e65d1ad1c33a28316",
+          "amount": 1024227.2
+        },
+        {
           "address": "0xfb0c5de26473c87d8f15f2fc7af9376e799e8bb8",
           "amount": 951897.4833230769
         },
         {
-          "address": "0x25796a69c402fe520b5f29d93143afc8b686369a",
-          "amount": 935808.3615687131
-        },
-        {
           "address": "0xf16cead05a8d8c5c463bb25ca3bd2b82dd6aa5de",
           "amount": 827739.11218
-        },
-        {
-          "address": "0x3599909d79d402de9a8b392c67050b9af788e32d",
-          "amount": 663836.0
-        },
-        {
-          "address": "0xe4610c83f441e623dcc4c40d0181f22b70eefa22",
-          "amount": 627666.0000000001
         }
       ]
     },
