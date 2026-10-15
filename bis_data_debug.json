@@ -1,14 +1,14 @@
 {
-  "timestamp": "2026-10-14T06:00:04.702959+00:00",
+  "timestamp": "2026-10-15T05:44:39.115141+00:00",
   "bis_swap": {
     "address": "0x62879BB3dD949c4CF06f71BF7c281DcF24D163e7",
     "incoming": {
       "total_senders": 193,
-      "total_amount": 190883297.95605716,
+      "total_amount": 192051461.02817664,
       "top_senders": [
         {
           "address": "0x17dbb1fa0c7a70db033e91d080ed0b87bc6bd542",
-          "amount": 81922154.89733343
+          "amount": 83090317.9694529
         },
         {
           "address": "0x4fe6a1dad4711a08e7cde7a6ec17f3c33ed1ed29",
@@ -90,7 +90,7 @@
     },
     "outgoing": {
       "total_receivers": 43,
-      "total_amount": 124587637.67951539,
+      "total_amount": 125755800.67951539,
       "top_receivers": [
         {
           "address": "0x17dbb1fa0c7a70db033e91d080ed0b87bc6bd542",
@@ -133,6 +133,10 @@
           "amount": 1599999.9999999998
         },
         {
+          "address": "0xd534c8b5fd466a9219983a9f88d18d56edaea550",
+          "amount": 1466055.0
+        },
+        {
           "address": "0x25796a69c402fe520b5f29d93143afc8b686369a",
           "amount": 935808.3615687131
         },
@@ -161,10 +165,6 @@
           "amount": 333148.0
         },
         {
-          "address": "0xd534c8b5fd466a9219983a9f88d18d56edaea550",
-          "amount": 297892.0
-        },
-        {
           "address": "0xe927a1e27240037af8efa44e65d1ad1c33a28316",
           "amount": 276743.2
         },
@@ -189,11 +189,11 @@
     },
     "outgoing": {
       "total_receivers": 1,
-      "total_amount": 81922154.89733343,
+      "total_amount": 83090317.9694529,
       "top_receivers": [
         {
           "address": "0x62879bb3dd949c4cf06f71bf7c281dcf24d163e7",
-          "amount": 81922154.89733343
+          "amount": 83090317.9694529
         }
       ]
     }
@@ -203,9 +203,9 @@
     "top_providers": [
       {
         "address": "0x62879bb3dd949c4cf06f71bf7c281dcf24d163e7",
-        "net_inflow": 2595287.207108587,
+        "net_inflow": 1427124.1349891126,
         "total_in": 84517442.10444202,
-        "total_out": 81922154.89733343
+        "total_out": 83090317.9694529
       }
     ]
   }
